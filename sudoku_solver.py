@@ -72,11 +72,11 @@ class soduku:
         return return_arr.flatten()
 
     
-    # Function to get the values that are implicitly blocked, 
+    # Function to get the values that are implicitly blocked. Might be able to simplify?
     def get_blocked(self,row, col, rows, cols, rows_loop, cols_loop):
         col_blocked = set()
         row_blocked = set()
-       
+    
         for col_block in cols:
             if self.possible_values[row][col_block] is not None:
                 col_blocked = col_blocked.union(set(self.possible_values[row][col_block]))
@@ -98,6 +98,8 @@ class soduku:
         three = set([0,1,2])
         six = set([3,4,5])
         nine = set([6,7,8])
+
+        full = set([1,2,3,4,5,6,7,8,9])
 
         if row < 3 and col<3:
 
@@ -173,6 +175,29 @@ class soduku:
             return self.get_blocked(row, col, rows, cols, rows_loop, cols_loop)
             
 
+    def get_possible(self, row, col):
+
+        possible_values = set(range(1, 10))
+
+        whole_row = self.__solver_grid[row, :]
+        whole_col = self.__solver_grid[:, col]
+        whole_box = self.get_box(row, col)
+
+        available = possible_values - set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0])))
+
+        return list(available)
+
+
+    def update_possible(self):
+
+        for row in range(9):
+            for col in range(9):
+                
+                if self.__solver_grid[row, col] == 0:
+                    self.possible_values[row][col] = self.get_possible(row, col)
+                else:
+                    self.possible_values[row][col] = None
+
     def solve(self):
 
         possible_values = set(range(1, 10))
@@ -189,22 +214,39 @@ class soduku:
                         whole_col = self.__solver_grid[:, col]
                         whole_box = self.get_box(row, col)
 
-                        blocked_possible = self.get_blocked_possible(row, col)
-
-                        # Check what numbers that are blocked either by current row, column or box. 
-                        if len(blocked_possible) == 0:
-                            block_values = set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0])))
-                        else:
-                            block_values = set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0], np.array(list(blocked_possible)))))
+                        block_values =  set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0])))
                         available_values = possible_values-block_values
-                        self.possible_values[row][col] = list(available_values)
-                        if len(available_values) == 1:
-                            added = True 
-                            self.__solver_grid[row, col] = available_values.pop()
 
-            # Lägg till att kolla om det endast är en tom i rad/kolumn/box. Se till att self.possible_values uppdateras. Försök skriva om get_blocked_possible
+                        self.update_possible()
+                        
+                        # If it is only one possible digit in cell, put it there right away
+                        if len(available_values) == 1:
+
+                            self.__solver_grid[row, col] = available_values.pop()
+                            self.possible_values[row][col] = None
+                            added = True
+
+                        # else:
+
+                        #     blocked_possible = self.get_blocked_possible(row, col)
+        
+                        #     if len(blocked_possible) == 0:
+                        #         block_values =  set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0])))
+                        #     else:
+                        #         block_values = set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0], np.array(list(blocked_possible)))))
+
+                        #     available_values = possible_values-block_values
+                        #     #self.possible_values[row][col] = list(available_values)
+
+                        #     if len(available_values) == 1:
+                        #         added = True 
+                        #         self.__solver_grid[row, col] = available_values.pop()
+                        #         self.possible_values[row][col] = None
+
+            # get_blocked_possible/get_blocked is erroneous
             if not self.valid_grid():
                 print("Invalid grid!")
+                exit(1)
             else:
                 print("Grid OK!")
 
@@ -216,13 +258,13 @@ class soduku:
             if not added and not first:
                 print("Solver stuck!")
                 self.print()
-                print(len(self.possible_values))
                 for row in self.possible_values:
                     print(row)
                 break
             first = False
 
     def print(self):
+        print(self.__original_grid)
         print(self.__solver_grid)
 
         
