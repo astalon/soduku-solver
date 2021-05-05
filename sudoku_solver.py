@@ -256,10 +256,6 @@ class soduku:
         whole_box = self.get_box(row, col)
 
         available = possible_values - set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0])))
-        if available == set([]):
-            print(self.__solver_grid)
-            print(row, col)
-            exit(1)
 
         return list(available)
 
@@ -287,12 +283,8 @@ class soduku:
                 for col in range(9):
 
                     if self.__solver_grid[row, col] == 0:
-                        whole_row = self.__solver_grid[row, :]
-                        whole_col = self.__solver_grid[:, col]
-                        whole_box = self.get_box(row, col)
 
-                        block_values =  set(np.concatenate((whole_row[whole_row>0], whole_col[whole_col>0], whole_box[whole_box>0])))
-                        available_values = possible_values-block_values
+                        available_values = self.get_possible(row, col)
 
                         # If it is only one possible digit in cell, put it there right away
                         if len(available_values) == 1:
@@ -308,11 +300,17 @@ class soduku:
                     for col in range(9):
 
                         if self.__solver_grid[row, col] == 0:
-                            self.update_possible()
+                            self.update_possible() # korrekt
 
-                            box_possible = self.get_box_possible(row,col)
+                            box_possible = self.get_box_possible(row,col) # Fungerar korrekt
 
-                            single_possible = set(self.possible_values.iloc[row, col])
+                            single_possible = set(self.possible_values.iloc[row, col]) # Korrekt
+
+                            if row == 1 and col == 4:
+                                print(self.possible_values)
+                                print(self.__solver_grid)
+                                print(box_possible)
+                                print(single_possible)
 
                             for index_row, row_possible in box_possible.iterrows():
                                 for index_col, col_possible in row_possible.iteritems():
@@ -327,16 +325,20 @@ class soduku:
                                 last_added_row = row
                                 last_added_col = col
 
-                            # else:
-                            #     implicit_block = self.get_blocked_implicit(row, col)
 
-                            #     if len(implicit_block) > 0:
-                            #         available_values = available_values - implicit_block
+            # if not added:
+            #     for row in range(9):
+            #         for col in range(9):
+            #             self.update_possible()
+            #             implicit_block = self.get_blocked_implicit(row, col)
 
-                            #         if len(available_values) == 1:
-                            #             self.__solver_grid[row, col] = available_values.pop()
-                            #             self.possible_values.iloc[row, col] = None
-                            #             added = True
+            #             if len(implicit_block) > 0:
+            #                 available_values = available_values - implicit_block
+
+            #                 if len(available_values) == 1:
+            #                     self.__solver_grid[row, col] = available_values.pop()
+            #                     self.possible_values.iloc[row, col] = None
+            #                     added = True
 
             if not self.valid_grid():
                 print("Invalid grid!")
@@ -365,5 +367,5 @@ class soduku:
 
         
 
-soduku = soduku("soduku5.txt")
+soduku = soduku("soduku4.txt")
 soduku.solve()
