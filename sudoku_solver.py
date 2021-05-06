@@ -246,7 +246,30 @@ class soduku:
 
         return self.get_blocked(row, col,box1, box2, rows_loop, box3, box4, cols_loop)
 
+    # Function to update effect of naked pairs in box
+    def naked_pairs_box(self, row, col):
 
+        naked_pair = None
+        box_possible = self.get_box_possible(row, col)
+        original = box_possible.to_numpy().flatten().tolist()
+        flattened = [val for val in original if val is not None and len(val)==2]
+
+        df = pd.DataFrame(flattened)
+        ret = df.value_counts()
+
+        for index, val in ret.iteritems():
+            if val == 2:
+                naked_pair = list(index)
+
+        if naked_pair is not None:
+            for index_row, row_possible in box_possible.iterrows():
+                for index_col, possible in row_possible.iteritems():
+                    if possible is not None:
+                        if possible != naked_pair:
+                            self.possible_values.iat[index_row, index_col] = list(set(self.possible_values.iloc[index_row, index_col])-set(naked_pair))
+
+
+    # Obtain the possible values in a cell given its row and column, direct deducting
     def get_possible(self, row, col):
 
         possible_values = set(range(1, 10))
@@ -259,7 +282,7 @@ class soduku:
 
         return list(available)
 
-
+    # Update all values in the grid with their possible values
     def update_possible(self):
 
         for row in range(9):
@@ -272,9 +295,6 @@ class soduku:
 
     def solve(self):
 
-        possible_values = set(range(1, 10))
-        last_added_row = 10
-        last_added_col = 10
         while not self.__solved:
 
             added = False
@@ -292,53 +312,51 @@ class soduku:
                             self.__solver_grid[row, col] = available_values.pop()
                             self.possible_values.iloc[row, col] = None
                             added = True
-                            last_added_row = row
-                            last_added_col = col
 
-            if not added:
-                for row in range(9):
-                    for col in range(9):
+            for row in range(9):
+                for col in range(9):
 
-                        if self.__solver_grid[row, col] == 0:
-                            self.update_possible() # korrekt
+                    if self.__solver_grid[row, col] == 0:
+                        self.update_possible()
+                        self.naked_pairs_box(row, col)
 
-                            box_possible = self.get_box_possible(row,col) # Fungerar korrekt
+                        box_possible = self.get_box_possible(row,col) 
+                        single_possible = set(self.possible_values.iloc[row, col])
 
-                            single_possible = set(self.possible_values.iloc[row, col]) # Korrekt
-
-                            if row == 1 and col == 4:
-                                print(self.possible_values)
-                                print(self.__solver_grid)
-                                print(box_possible)
-                                print(single_possible)
+                        if len(single_possible) == 1:
+                            self.__solver_grid[row, col] = single_possible.pop()
+                            self.possible_values.iloc[row, col] = None
+                            added = True
+                        else:
 
                             for index_row, row_possible in box_possible.iterrows():
                                 for index_col, col_possible in row_possible.iteritems():
                                     if col_possible is not None:
-                                        if index_row != row and index_col != col:
+                                        if index_row == row and index_col == col:
+                                            pass
+                                        else:
                                             single_possible = single_possible - set(col_possible)
 
+                            single_possible = single_possible - self.get_blocked_implicit(row, col)
                             if len(single_possible) == 1:
                                 self.__solver_grid[row, col] = single_possible.pop()
                                 self.possible_values.iloc[row, col] = None
                                 added = True
-                                last_added_row = row
-                                last_added_col = col
 
+                # for row in range(9):
+                #     for col in range(9):
+                #         if self.__solver_grid[row, col] == 0:
+                #             self.update_possible()
+                #             available_values = self.get_possible(row, col)
+                #             implicit_block = self.get_blocked_implicit(row, col)
 
-            # if not added:
-            #     for row in range(9):
-            #         for col in range(9):
-            #             self.update_possible()
-            #             implicit_block = self.get_blocked_implicit(row, col)
+                #             if len(implicit_block) > 0:
+                #                 available_values = available_values - implicit_block
 
-            #             if len(implicit_block) > 0:
-            #                 available_values = available_values - implicit_block
-
-            #                 if len(available_values) == 1:
-            #                     self.__solver_grid[row, col] = available_values.pop()
-            #                     self.possible_values.iloc[row, col] = None
-            #                     added = True
+                #                 if len(available_values) == 1:
+                #                     self.__solver_grid[row, col] = available_values.pop()
+                #                     self.possible_values.iloc[row, col] = None
+                #                     added = True
 
             if not self.valid_grid():
                 print("Invalid grid!")
