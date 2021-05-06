@@ -2,7 +2,11 @@ import pandas as pd
 import numpy as np
 import os
 from collections import Counter
-
+import time
+import cProfile
+import pstats
+import io
+import itertools
 
 class soduku:
 
@@ -269,6 +273,46 @@ class soduku:
                             self.possible_values.iat[index_row, index_col] = list(set(self.possible_values.iloc[index_row, index_col])-set(naked_pair))
 
 
+    # Get implicit blocks for column
+    def naked_pairs_col(self, col):
+
+        naked_pair = None
+        col_possible = self.possible_values.iloc[:, col]
+        flattened = [val for val in list(col_possible) if val is not None and len(val)==2]
+
+        df = pd.DataFrame(flattened)
+        ret = df.value_counts()
+
+        for index, val in ret.iteritems():
+            if val == 2:
+                naked_pair = list(index)
+
+        if naked_pair is not None:
+            for index_row, val in col_possible.iteritems():
+                if val is not None:
+                    if val != naked_pair:
+                        self.possible_values.iat[index_row, col] = list(set(self.possible_values.iloc[index_row, col])-set(naked_pair))
+
+
+    # Get implicit blocks for row
+    def naked_pairs_row(self, row):
+        naked_pair = None
+        row_possible = self.possible_values.iloc[row, :]
+        flattened = [val for val in list(row_possible) if val is not None and len(val)==2]
+
+        df = pd.DataFrame(flattened)
+        ret = df.value_counts()
+
+        for index, val in ret.iteritems():
+            if val == 2:
+                naked_pair = list(index)
+
+        if naked_pair is not None:
+            for index_col, val in row_possible.iteritems():
+                if val is not None:
+                    if val != naked_pair:
+                        self.possible_values.iat[row, index_col] = list(set(self.possible_values.iloc[row, index_col])-set(naked_pair))
+
     # Obtain the possible values in a cell given its row and column, direct deducting
     def get_possible(self, row, col):
 
@@ -293,6 +337,31 @@ class soduku:
                 else:
                     self.possible_values.iloc[row, col] = None
 
+        for row in range(0, 9 , 3):
+            for col in range(0, 9, 3):
+                self.naked_pairs_box(row, col)
+
+        for i in range(9):
+            self.naked_pairs_row(i)
+            self.naked_pairs_col(i)
+
+        for row in range(9):
+            self.hidden_subsets_row(row)
+
+
+    # Räkna hur många gånger de olika kombinationerna förekommer på andra "possible" ställen, om endast två, ta bort alla andra possibles
+    def hidden_subsets_row(self, row):
+        
+        row_possible = self.possible_values.iloc[row, :]
+
+        for col, possible in row_possible.iteritems():
+            if possible is not None:
+                combinations = itertools.combinations(possible, 2)
+                print(list(combinations))
+                exit(1)
+
+
+
     def solve(self):
 
         while not self.__solved:
@@ -301,62 +370,81 @@ class soduku:
 
             for row in range(9):
                 for col in range(9):
-
                     if self.__solver_grid[row, col] == 0:
 
                         available_values = self.get_possible(row, col)
 
                         # If it is only one possible digit in cell, put it there right away
                         if len(available_values) == 1:
-
                             self.__solver_grid[row, col] = available_values.pop()
                             self.possible_values.iloc[row, col] = None
                             added = True
+            update=True
+            if not added:
+                for row in range(9):
+                    for col in range(9):
 
-            for row in range(9):
-                for col in range(9):
+                        if self.__solver_grid[row, col] == 0:
+                            if update:
+                                self.update_possible()
+                                update=False
 
-                    if self.__solver_grid[row, col] == 0:
-                        self.update_possible()
-                        self.naked_pairs_box(row, col)
+                            single_possible = set(self.possible_values.iloc[row, col])
 
-                        box_possible = self.get_box_possible(row,col) 
-                        single_possible = set(self.possible_values.iloc[row, col])
-
-                        if len(single_possible) == 1:
-                            self.__solver_grid[row, col] = single_possible.pop()
-                            self.possible_values.iloc[row, col] = None
-                            added = True
-                        else:
-
-                            for index_row, row_possible in box_possible.iterrows():
-                                for index_col, col_possible in row_possible.iteritems():
-                                    if col_possible is not None:
-                                        if index_row == row and index_col == col:
-                                            pass
-                                        else:
-                                            single_possible = single_possible - set(col_possible)
-
-                            single_possible = single_possible - self.get_blocked_implicit(row, col)
                             if len(single_possible) == 1:
                                 self.__solver_grid[row, col] = single_possible.pop()
                                 self.possible_values.iloc[row, col] = None
+                                update = True
                                 added = True
+                            else:
 
-                # for row in range(9):
-                #     for col in range(9):
-                #         if self.__solver_grid[row, col] == 0:
-                #             self.update_possible()
-                #             available_values = self.get_possible(row, col)
-                #             implicit_block = self.get_blocked_implicit(row, col)
+                                # Sole candidate in a column?
+                                if not added:
+                                    sole_possible_col = set(self.possible_values.iloc[row, col])
+                                    col_possible = self.possible_values.iloc[:, col]
+                                    for ix_row, val in col_possible.iteritems():
+                                        if ix_row == row:
+                                            pass
+                                        elif val is not None:
+                                            sole_possible_col = sole_possible_col - set(val)
+                                    
+                                    if len(sole_possible_col) == 1:
+                                        self.__solver_grid[row, col] = sole_possible_col.pop()
+                                        update = True
+                                        added = True
 
-                #             if len(implicit_block) > 0:
-                #                 available_values = available_values - implicit_block
+                                # Sole candidate in a box?
+                                if not added:
+                                    box_possible = self.get_box_possible(row,col)
+                                    for index_row, row_possible in box_possible.iterrows():
+                                        for index_col, col_possible in row_possible.iteritems():
+                                            if col_possible is not None:
+                                                if index_row == row and index_col == col:
+                                                    pass
+                                                else:
+                                                    single_possible = single_possible - set(col_possible)
 
-                #                 if len(available_values) == 1:
-                #                     self.__solver_grid[row, col] = available_values.pop()
-                #                     self.possible_values.iloc[row, col] = None
-                #                     added = True
+                                    single_possible = single_possible - self.get_blocked_implicit(row, col)
+                                    if len(single_possible) == 1:
+                                        self.__solver_grid[row, col] = single_possible.pop()
+                                        self.possible_values.iloc[row, col] = None
+                                        update=True
+                                        added = True
+
+                                # Sole candidate in row?
+                                if not added:
+                                    sole_possible_row = set(self.possible_values.iloc[row, col])
+                                    row_possible = self.possible_values.iloc[row, :]
+                                    for ix_col, val in row_possible.iteritems():
+                                        if ix_col == col:
+                                            pass
+                                        elif val is not None:
+                                            sole_possible_row = sole_possible_row - set(val)
+                                    
+                                    if len(sole_possible_row) == 1:
+                                        self.__solver_grid[row, col] = sole_possible_row.pop()
+                                        added = True                           
+
 
             if not self.valid_grid():
                 print("Invalid grid!")
@@ -366,11 +454,16 @@ class soduku:
 
             if 0 not in self.__solver_grid.flatten():
                 print("Sudoku solved!")
+                if not self.valid_grid():
+                    print("Invalid grid!")
+                    exit(1)
+                else:
+                    print("Grid OK!")
+
                 self.print()
                 self.__solved = True
 
             if not added:
-
                 u, counts = np.unique(self.__solver_grid.flatten(), return_counts=True)
                 print("Solver stuck!")
                 print("Numbers solved: ", 81-counts[0])
@@ -378,12 +471,22 @@ class soduku:
                 print(self.possible_values)
                 break
 
-
     def print(self):
         print(self.__original_grid)
         print(self.__solver_grid)
 
-        
+
+pr = cProfile.Profile()
+pr.enable()
 
 soduku = soduku("soduku4.txt")
 soduku.solve()
+
+pr.disable()
+s = io.StringIO()
+ps = pstats.Stats(pr, stream=s).sort_stats('cumtime')
+ps.print_stats()
+
+full_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "profile.txt")
+with open(full_path, 'w+') as f:
+    f.write(s.getvalue())
