@@ -345,21 +345,41 @@ class soduku:
             self.naked_pairs_row(i)
             self.naked_pairs_col(i)
 
+        # Might be superflous with naked_pairs once hidden_subsets are working, given how it is implemented?
         for row in range(9):
             self.hidden_subsets_row(row)
 
 
-    # Räkna hur många gånger de olika kombinationerna förekommer på andra "possible" ställen, om endast två, ta bort alla andra possibles
+    # Find and deal with hidden subsets
     def hidden_subsets_row(self, row):
         
         row_possible = self.possible_values.iloc[row, :]
+        concatenated = [val for val in row_possible if val is not None for val in val]
+        missing_row = set(concatenated)
 
-        for col, possible in row_possible.iteritems():
-            if possible is not None:
-                combinations = itertools.combinations(possible, 2)
-                print(list(combinations))
-                exit(1)
+        counted = Counter(concatenated)
+        possible_2s = [v for v in missing_row if counted[v]==2]
 
+        combinations = itertools.combinations(possible_2s, 2)
+
+        for combo in combinations:
+            found_combo = combo
+            found_hidden = 0
+            cols = []
+            for col_index, possible in row_possible.iteritems():
+                if possible is not None:
+                    if combo in list(itertools.combinations(possible,2)):
+                        found_hidden += 1
+                        cols.append(col_index)
+
+            if found_hidden == 2:
+                self.possible_values.iat[row, cols[0]] = list(found_combo)
+                self.possible_values.iat[row, cols[1]] = list(found_combo)
+
+
+
+    def count_hidden_subset(self, combination, row):
+        pass
 
 
     def solve(self):
@@ -479,7 +499,7 @@ class soduku:
 pr = cProfile.Profile()
 pr.enable()
 
-soduku = soduku("soduku4.txt")
+soduku = soduku("soduku5.txt")
 soduku.solve()
 
 pr.disable()
