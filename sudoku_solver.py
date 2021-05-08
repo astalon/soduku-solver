@@ -20,10 +20,6 @@ class soduku:
         self.possible_values = pd.DataFrame(np.zeros((9,9)))
         self.possible_values.iloc[:, :] = None
 
-    def print_invalid(self):
-        print("Invalid grid generated!")
-        self.print()
-
     def valid_grid(self):
         
         # Check all rows, columns and boxes for duplicates. As soon as one is found, return false, else true
@@ -31,14 +27,12 @@ class soduku:
         for row in self.__solver_grid:
             _, counts = np.unique(row[row>0], return_counts=True)
             if np.any(counts>1):
-                self.print_invalid()
                 return False
 
         # Column check
         for col in self.__solver_grid.T:
             _, counts = np.unique(col[col>0], return_counts=True)
             if np.any(counts>1):
-                self.print_invalid()
                 return False
 
         # Box check
@@ -48,7 +42,6 @@ class soduku:
                 flattened = box.flatten()
                 _, counts = np.unique(flattened[flattened>0], return_counts=True)
                 if np.any(counts>1):
-                    self.print_invalid()
                     return False
 
         # If all rows, columns and boxes are OK, grid is valid
@@ -279,26 +272,29 @@ class soduku:
         # Might be superflous with naked_pairs once hidden_subsets are working, given how it is implemented?
         for row in range(0, 9 , 3):
             for col in range(0, 9, 3):
-                self.hidden_subsets_box(row, col)
+                self.hidden_subsets_box(row, col, n=2)
+                self.hidden_subsets_box(row, col, n=3)
 
         for row in range(9):
-            self.hidden_subsets_row(row)
+            self.hidden_subsets_row(row, n=2)
+            self.hidden_subsets_row(row, n=3)
 
         for col in range(9):
-            self.hidden_subsets_col(col)
+            self.hidden_subsets_col(col, n=2)
+            self.hidden_subsets_col(col, n=3)
 
 
     # Find and deal with hidden subsets
-    def hidden_subsets_row(self, row):
+    def hidden_subsets_row(self, row, n=2):
         
         row_possible = self.possible_values.iloc[row, :]
         concatenated = [val for val in row_possible if val is not None for val in val]
         missing_row = set(concatenated)
 
         counted = Counter(concatenated)
-        possible_2s = [v for v in missing_row if counted[v]==2]
+        possible_2s = [v for v in missing_row if counted[v]==n]
 
-        combinations = itertools.combinations(possible_2s, 2)
+        combinations = itertools.combinations(possible_2s, n)
 
         for combo in combinations:
             found_combo = combo
@@ -310,20 +306,21 @@ class soduku:
                         found_hidden += 1
                         cols.append(col_index)
 
-            if found_hidden == 2:
-                self.possible_values.iat[row, cols[0]] = list(found_combo)
-                self.possible_values.iat[row, cols[1]] = list(found_combo)
+            if found_hidden == n:
+                for i in range(n):
+                    self.possible_values.iat[row, cols[i]] = list(found_combo)
 
-    def hidden_subsets_col(self, col):
+
+    def hidden_subsets_col(self, col, n=2):
         
         col_possible = self.possible_values.iloc[:, col]
         concatenated = [val for val in col_possible if val is not None for val in val]
         missing_col = set(concatenated)
 
         counted = Counter(concatenated)
-        possible_2s = [v for v in missing_col if counted[v]==2]
+        possible_2s = [v for v in missing_col if counted[v]==n]
 
-        combinations = itertools.combinations(possible_2s, 2)
+        combinations = itertools.combinations(possible_2s, n)
 
         for combo in combinations:
             found_combo = combo
@@ -331,15 +328,16 @@ class soduku:
             rows = []
             for row_index, possible in col_possible.iteritems():
                 if possible is not None:
-                    if combo in list(itertools.combinations(possible,2)):
+                    if combo in list(itertools.combinations(possible,n)):
                         found_hidden += 1
                         rows.append(row_index)
 
-            if found_hidden == 2:
-                self.possible_values.iat[rows[0], col] = list(found_combo)
-                self.possible_values.iat[rows[1], col] = list(found_combo)
+            if found_hidden == n:
+                for i in range(n):
+                    self.possible_values.iat[rows[i], col] = list(found_combo)
 
-    def hidden_subsets_box(self, row, col):
+
+    def hidden_subsets_box(self, row, col, n=2):
         
         box_possible = self.get_box_possible(row, col)
         original = box_possible.to_numpy().flatten().tolist()
@@ -347,9 +345,9 @@ class soduku:
         missing_box = set(concatenated)
 
         counted = Counter(concatenated)
-        possible_2s = [v for v in missing_box if counted[v]==2]
+        possible_2s = [v for v in missing_box if counted[v]==n]
 
-        combinations = itertools.combinations(possible_2s, 2)
+        combinations = itertools.combinations(possible_2s, n)
 
         for combo in combinations:
             found_combo = combo
@@ -362,12 +360,36 @@ class soduku:
                             found_hidden += 1
                             box_indices.append((row_index, col_index))
 
-            if found_hidden == 2:
-                self.possible_values.iat[box_indices[0][0],box_indices[0][1]] = list(found_combo)
-                self.possible_values.iat[box_indices[1][0],box_indices[1][1]] = list(found_combo)
+            if found_hidden == n:
+                for i in range(n):
+                    self.possible_values.iat[box_indices[i][0],box_indices[i][1]] = list(found_combo)
+
+    def solve_bruteforce(self):
+        self.update_possible()
+
+        original_flattened = self.possible_values.to_numpy().flatten().tolist()
+        flattened = [val for val in original_flattened if val is not None]
+
+        all_combinations = itertools.product(*flattened)
+        insert_indices = []
+
+        for row_index, col in self.possible_values.iterrows():
+            for col_index, possibles in col.iteritems():
+                if possibles is not None:
+                    insert_indices.append((row_index, col_index))
+
+        for combo in all_combinations:
+
+            for i, val in enumerate(combo):
+                self.__solver_grid[insert_indices[i][0],insert_indices[i][1]] = val
+
+            if self.valid_grid():
+                print("Solution found!")
+                self.print()
+                exit(0)
 
 
-    def solve(self):
+    def solve(self, guess = False):
 
         while not self.__solved:
 
@@ -469,12 +491,15 @@ class soduku:
                 self.__solved = True
 
             if not added:
-                u, counts = np.unique(self.__solver_grid.flatten(), return_counts=True)
-                print("Solver stuck!")
-                print("Numbers solved: ", 81-counts[0])
-                self.print()
-                print(self.possible_values)
-                break
+                if guess:
+                    pass
+                else:
+                    u, counts = np.unique(self.__solver_grid.flatten(), return_counts=True)
+                    print("Solver stuck!")
+                    print("Numbers solved: ", 81-counts[0])
+                    self.print()
+                    print(self.possible_values)
+                    break
 
     def print(self):
         print(self.__original_grid)
@@ -484,8 +509,8 @@ class soduku:
 pr = cProfile.Profile()
 pr.enable()
 
-soduku = soduku("soduku5.txt")
-soduku.solve()
+soduku = soduku("soduku1.txt")
+soduku.solve_bruteforce()
 
 pr.disable()
 s = io.StringIO()
