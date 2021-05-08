@@ -250,68 +250,6 @@ class soduku:
 
         return self.get_blocked(row, col,box1, box2, rows_loop, box3, box4, cols_loop)
 
-    # Function to update effect of naked pairs in box
-    def naked_pairs_box(self, row, col):
-
-        naked_pair = None
-        box_possible = self.get_box_possible(row, col)
-        original = box_possible.to_numpy().flatten().tolist()
-        flattened = [val for val in original if val is not None and len(val)==2]
-
-        df = pd.DataFrame(flattened)
-        ret = df.value_counts()
-
-        for index, val in ret.iteritems():
-            if val == 2:
-                naked_pair = list(index)
-
-        if naked_pair is not None:
-            for index_row, row_possible in box_possible.iterrows():
-                for index_col, possible in row_possible.iteritems():
-                    if possible is not None:
-                        if possible != naked_pair:
-                            self.possible_values.iat[index_row, index_col] = list(set(self.possible_values.iloc[index_row, index_col])-set(naked_pair))
-
-
-    # Get implicit blocks for column
-    def naked_pairs_col(self, col):
-
-        naked_pair = None
-        col_possible = self.possible_values.iloc[:, col]
-        flattened = [val for val in list(col_possible) if val is not None and len(val)==2]
-
-        df = pd.DataFrame(flattened)
-        ret = df.value_counts()
-
-        for index, val in ret.iteritems():
-            if val == 2:
-                naked_pair = list(index)
-
-        if naked_pair is not None:
-            for index_row, val in col_possible.iteritems():
-                if val is not None:
-                    if val != naked_pair:
-                        self.possible_values.iat[index_row, col] = list(set(self.possible_values.iloc[index_row, col])-set(naked_pair))
-
-
-    # Get implicit blocks for row
-    def naked_pairs_row(self, row):
-        naked_pair = None
-        row_possible = self.possible_values.iloc[row, :]
-        flattened = [val for val in list(row_possible) if val is not None and len(val)==2]
-
-        df = pd.DataFrame(flattened)
-        ret = df.value_counts()
-
-        for index, val in ret.iteritems():
-            if val == 2:
-                naked_pair = list(index)
-
-        if naked_pair is not None:
-            for index_col, val in row_possible.iteritems():
-                if val is not None:
-                    if val != naked_pair:
-                        self.possible_values.iat[row, index_col] = list(set(self.possible_values.iloc[row, index_col])-set(naked_pair))
 
     # Obtain the possible values in a cell given its row and column, direct deducting
     def get_possible(self, row, col):
@@ -337,17 +275,17 @@ class soduku:
                 else:
                     self.possible_values.iloc[row, col] = None
 
-        for row in range(0, 9 , 3):
-            for col in range(0, 9, 3):
-                self.naked_pairs_box(row, col)
-
-        for i in range(9):
-            self.naked_pairs_row(i)
-            self.naked_pairs_col(i)
 
         # Might be superflous with naked_pairs once hidden_subsets are working, given how it is implemented?
+        for row in range(0, 9 , 3):
+            for col in range(0, 9, 3):
+                self.hidden_subsets_box(row, col)
+
         for row in range(9):
             self.hidden_subsets_row(row)
+
+        for col in range(9):
+            self.hidden_subsets_col(col)
 
 
     # Find and deal with hidden subsets
@@ -376,10 +314,57 @@ class soduku:
                 self.possible_values.iat[row, cols[0]] = list(found_combo)
                 self.possible_values.iat[row, cols[1]] = list(found_combo)
 
+    def hidden_subsets_col(self, col):
+        
+        col_possible = self.possible_values.iloc[:, col]
+        concatenated = [val for val in col_possible if val is not None for val in val]
+        missing_col = set(concatenated)
 
+        counted = Counter(concatenated)
+        possible_2s = [v for v in missing_col if counted[v]==2]
 
-    def count_hidden_subset(self, combination, row):
-        pass
+        combinations = itertools.combinations(possible_2s, 2)
+
+        for combo in combinations:
+            found_combo = combo
+            found_hidden = 0
+            rows = []
+            for row_index, possible in col_possible.iteritems():
+                if possible is not None:
+                    if combo in list(itertools.combinations(possible,2)):
+                        found_hidden += 1
+                        rows.append(row_index)
+
+            if found_hidden == 2:
+                self.possible_values.iat[rows[0], col] = list(found_combo)
+                self.possible_values.iat[rows[1], col] = list(found_combo)
+
+    def hidden_subsets_box(self, row, col):
+        
+        box_possible = self.get_box_possible(row, col)
+        original = box_possible.to_numpy().flatten().tolist()
+        concatenated = [val for val in original if val is not None for val in val]
+        missing_box = set(concatenated)
+
+        counted = Counter(concatenated)
+        possible_2s = [v for v in missing_box if counted[v]==2]
+
+        combinations = itertools.combinations(possible_2s, 2)
+
+        for combo in combinations:
+            found_combo = combo
+            found_hidden = 0
+            box_indices = []
+            for row_index, cols in box_possible.iterrows():
+                for col_index, possible in cols.iteritems():
+                    if possible is not None:
+                        if combo in list(itertools.combinations(possible,2)):
+                            found_hidden += 1
+                            box_indices.append((row_index, col_index))
+
+            if found_hidden == 2:
+                self.possible_values.iat[box_indices[0][0],box_indices[0][1]] = list(found_combo)
+                self.possible_values.iat[box_indices[1][0],box_indices[1][1]] = list(found_combo)
 
 
     def solve(self):
