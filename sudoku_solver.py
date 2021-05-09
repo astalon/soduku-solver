@@ -258,7 +258,7 @@ class soduku:
         return list(available)
 
     # Update all values in the grid with their possible values
-    def update_possible(self):
+    def update_possible(self, brute_force = False):
 
         for row in range(9):
             for col in range(9):
@@ -268,20 +268,19 @@ class soduku:
                 else:
                     self.possible_values.iloc[row, col] = None
 
+        if not brute_force:        
+            for row in range(0, 9 , 3):
+                for col in range(0, 9, 3):
+                    self.hidden_subsets_box(row, col, n=2)
+                    self.hidden_subsets_box(row, col, n=3)
 
-        # Might be superflous with naked_pairs once hidden_subsets are working, given how it is implemented?
-        for row in range(0, 9 , 3):
-            for col in range(0, 9, 3):
-                self.hidden_subsets_box(row, col, n=2)
-                self.hidden_subsets_box(row, col, n=3)
+            for row in range(9):
+                self.hidden_subsets_row(row, n=2)
+                self.hidden_subsets_row(row, n=3)
 
-        for row in range(9):
-            self.hidden_subsets_row(row, n=2)
-            self.hidden_subsets_row(row, n=3)
-
-        for col in range(9):
-            self.hidden_subsets_col(col, n=2)
-            self.hidden_subsets_col(col, n=3)
+            for col in range(9):
+                self.hidden_subsets_col(col, n=2)
+                self.hidden_subsets_col(col, n=3)
 
 
     # Find and deal with hidden subsets
@@ -364,37 +363,93 @@ class soduku:
                 for i in range(n):
                     self.possible_values.iat[box_indices[i][0],box_indices[i][1]] = list(found_combo)
 
-    def solve_bruteforce(self):
+    def solve_bruteforce(self, start=0):
+
+        # while True:
+        #     self.update_possible()
+        #     added = False
+
+        #     for row in range(9):
+        #         for col in range(9):
+        #             val = self.possible_values.iloc[row, col]
+        #             if val is not None:
+        #                 if len(val) == 1:
+        #                     self.__solver_grid[row, col] = val[0]
+        #                     added = True
+
+        #     if not added:
+        #         break
+        grid = self.__solver_grid.copy()
         self.update_possible()
 
-        original_flattened = self.possible_values.to_numpy().flatten().tolist()
-        flattened = [val for val in original_flattened if val is not None]
+        row = self.possible_values.iloc[0, :]
+        missing_lists = [val for val in row if val is not None]
+        permutations = list(itertools.product(*missing_lists))
+        #missing_row = set([val for val in row if val is not None for val in val])
+        #permutations = list(itertools.product(missing_row))
 
-        all_combinations = itertools.product(*flattened)
-        insert_indices = []
+        for ix, first_row_guess in enumerate(permutations):
+            solved = False
+            first_row_guess = list(first_row_guess)
 
-        for row_index, col in self.possible_values.iterrows():
-            for col_index, possibles in col.iteritems():
-                if possibles is not None:
-                    insert_indices.append((row_index, col_index))
+            self.__solver_grid = grid.copy()
+            
+            # Add the currenet guess to the row
+            for i in range(9):
+                if self.__solver_grid[0, i] == 0:
+                    self.__solver_grid[0, i] = first_row_guess.pop(0)
+            
+            self.update_possible(True)
+            flattened_possible = list(self.possible_values.to_numpy().flatten())
 
-        for combo in all_combinations:
+            # If we make a guess, which produces 0 possible numbers for an cell which is not set, the guess is incorrect. Start over
+            if [] not in flattened_possible:
+                if self.valid_grid():
+                    solved = self.solve_bruteforce_aux(1)
 
-            for i, val in enumerate(combo):
-                self.__solver_grid[insert_indices[i][0],insert_indices[i][1]] = val
-
-            if self.valid_grid():
-                print("Solution found!")
+            if solved:
+                if self.valid_grid():
+                    print("Sodoku solved correctly!")
+                else:
+                    print("Invalid grid generated")
+                    
                 self.print()
-                exit(0)
+
+    def solve_bruteforce_aux(self, current_row):
+        print("Trying row: ", current_row)
+        row = self.possible_values.iloc[current_row, :]
+        missing_lists = [val for val in row if val is not None]
+        permutations = list(itertools.product(*missing_lists))
+        #missing_row = set([val for val in row if val is not None for val in val])
+        #permutations = list(itertools.permutations(missing_row, len(missing_row)))
+        grid = self.__solver_grid.copy()
+
+        for row_guess in permutations:
+            row_guess = list(row_guess)
+            self.__solver_grid = grid.copy()
+
+            for i in range(9):
+                if self.__solver_grid[current_row, i] == 0:
+                    self.__solver_grid[current_row, i] = row_guess.pop(0)
+            
+            self.update_possible(True)
+            flattened_possible = list(self.possible_values.to_numpy().flatten())
+
+            if [] not in flattened_possible:
+                if self.valid_grid():
+                    if current_row == 8:
+                        return True
+                    else:
+                        return self.solve_bruteforce_aux(current_row+1)
+
+        self.__solver_grid = grid.copy()
+        return False
 
 
     def solve(self, guess = False):
 
         while not self.__solved:
-
             added = False
-
             for row in range(9):
                 for col in range(9):
                     if self.__solver_grid[row, col] == 0:
