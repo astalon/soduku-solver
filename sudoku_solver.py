@@ -363,86 +363,99 @@ class soduku:
                 for i in range(n):
                     self.possible_values.iat[box_indices[i][0],box_indices[i][1]] = list(found_combo)
 
-    def solve_bruteforce(self, start=0):
+    def solve_bruteforce(self, start=0, add_easy = False):
 
-        # while True:
-        #     self.update_possible()
-        #     added = False
+        if add_easy:
+            while True:
+                self.update_possible()
+                added = False
 
-        #     for row in range(9):
-        #         for col in range(9):
-        #             val = self.possible_values.iloc[row, col]
-        #             if val is not None:
-        #                 if len(val) == 1:
-        #                     self.__solver_grid[row, col] = val[0]
-        #                     added = True
+                for row in range(9):
+                    for col in range(9):
+                        val = self.possible_values.iloc[row, col]
+                        if val is not None:
+                            if len(val) == 1:
+                                self.__solver_grid[row, col] = val[0]
+                                added = True
 
-        #     if not added:
-        #         break
+                if not added:
+                    break
+
         grid = self.__solver_grid.copy()
         self.update_possible()
 
         row = self.possible_values.iloc[0, :]
         missing_lists = [val for val in row if val is not None]
         permutations = list(itertools.product(*missing_lists))
-        #missing_row = set([val for val in row if val is not None for val in val])
-        #permutations = list(itertools.product(missing_row))
 
-        for ix, first_row_guess in enumerate(permutations):
+        for first_row_guess in permutations:
+
             solved = False
             first_row_guess = list(first_row_guess)
 
             self.__solver_grid = grid.copy()
             
-            # Add the currenet guess to the row
+            # Add the current guess to the row
             for i in range(9):
                 if self.__solver_grid[0, i] == 0:
                     self.__solver_grid[0, i] = first_row_guess.pop(0)
-            
-            self.update_possible(True)
-            flattened_possible = list(self.possible_values.to_numpy().flatten())
 
-            # If we make a guess, which produces 0 possible numbers for an cell which is not set, the guess is incorrect. Start over
-            if [] not in flattened_possible:
-                if self.valid_grid():
-                    solved = self.solve_bruteforce_aux(1)
+            unique = np.unique(self.__solver_grid[0, :])
 
-            if solved:
-                if self.valid_grid():
-                    print("Sodoku solved correctly!")
-                else:
-                    print("Invalid grid generated")
-                    
-                self.print()
+            if unique.size == 9:
+
+                self.update_possible(True)
+                flattened_possible = list(self.possible_values.to_numpy().flatten())
+
+                # If we make a guess, which produces 0 possible numbers for an cell which is not set, the guess is incorrect. Start over
+                if [] not in flattened_possible:
+                    if self.valid_grid():
+                        solved = self.solve_bruteforce_aux(1)
+
+                if solved:
+                    if self.valid_grid():
+                        print("Sodoku solved correctly!")
+                    else:
+                        print("Invalid grid generated")
+                        
+                    self.print()
+                    break
 
     def solve_bruteforce_aux(self, current_row):
         print("Trying row: ", current_row)
         row = self.possible_values.iloc[current_row, :]
+
         missing_lists = [val for val in row if val is not None]
         permutations = list(itertools.product(*missing_lists))
-        #missing_row = set([val for val in row if val is not None for val in val])
-        #permutations = list(itertools.permutations(missing_row, len(missing_row)))
+
         grid = self.__solver_grid.copy()
 
         for row_guess in permutations:
+
             row_guess = list(row_guess)
             self.__solver_grid = grid.copy()
 
             for i in range(9):
                 if self.__solver_grid[current_row, i] == 0:
                     self.__solver_grid[current_row, i] = row_guess.pop(0)
+
+            unique = np.unique(self.__solver_grid[current_row, :])
+
+            if unique.size == 9:
             
-            self.update_possible(True)
-            flattened_possible = list(self.possible_values.to_numpy().flatten())
+                self.update_possible(True)
+                flattened_possible = list(self.possible_values.to_numpy().flatten())
 
-            if [] not in flattened_possible:
-                if self.valid_grid():
-                    if current_row == 8:
-                        return True
-                    else:
-                        return self.solve_bruteforce_aux(current_row+1)
+                if [] not in flattened_possible:
+                    if self.valid_grid():
+                        if current_row == 8:
+                            return True
+                        else:
+                            solved =  self.solve_bruteforce_aux(current_row+1)
+                            if solved:
+                                return True
 
-        self.__solver_grid = grid.copy()
+        self.__solver_grid = grid
         return False
 
 
@@ -564,7 +577,7 @@ class soduku:
 pr = cProfile.Profile()
 pr.enable()
 
-soduku = soduku("soduku1.txt")
+soduku = soduku("s15a.txt")
 soduku.solve_bruteforce()
 
 pr.disable()
